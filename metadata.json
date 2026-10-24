@@ -1,0 +1,6 @@
+{
+  "name": "SyncTimer QR - リアルタイム共有タイマー",
+  "description": "QRコードでオン/オフ操作や他デバイスとのリアルタイム同期ができるタイマーアプリ。共有リンクで複数デバイスから開始・停止・リセットが可能。",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

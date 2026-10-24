@@ -1,0 +1,32 @@
+{
+  "id": "./",
+  "name": "SyncTimer QR - リアルタイム共有タイマー",
+  "short_name": "SyncTimer",
+  "description": "QRコードでスタート・ストップ操作ができるタイマー。1日・1週間・1ヶ月の統計グラフやポモドーロ時間設定に対応。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    {
+      "src": "./pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
