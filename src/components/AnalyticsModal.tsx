@@ -6,13 +6,12 @@ import {
   Clock,
   TrendingUp,
   Download,
-  RotateCcw,
   Sparkles,
   Zap,
   Trash2,
   CheckCircle2,
 } from 'lucide-react';
-import { AnalyticsSummary, ChartBarData, TimerRecord } from '../types';
+import { AnalyticsSummary, ChartBarData } from '../types';
 
 interface AnalyticsModalProps {
   isOpen: boolean;
@@ -31,6 +30,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
     setLoading(true);
     try {
       const res = await fetch(`/api/room/${encodeURIComponent(roomId)}/analytics?period=${p}`);
+      if (!res.ok) throw new Error('Network response was not ok');
       const json = await res.json();
       setData(json);
     } catch (err) {
@@ -45,6 +45,11 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
       fetchAnalytics(period);
     }
   }, [isOpen, period, fetchAnalytics]);
+
+  const handlePeriodChange = (newPeriod: 'day' | 'week' | 'month') => {
+    setHoveredBar(null);
+    setPeriod(newPeriod);
+  };
 
   const handleSeedData = async () => {
     try {
@@ -74,14 +79,14 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
 
     const headers = ['ID', '開始時刻', '終了時刻', '計測時間(秒)', '計測時間(表記)', 'モード', '開始トリガー', '停止トリガー'];
     const rows = data.recentRecords.map((r) => [
-      r.id,
-      new Date(r.startTime).toLocaleString(),
-      new Date(r.endTime).toLocaleString(),
-      r.durationSeconds,
-      formatDuration(r.durationSeconds),
-      r.mode,
-      r.triggerStart,
-      r.triggerStop,
+      r.id || '',
+      formatFullDateTime(r.startTime),
+      formatFullDateTime(r.endTime),
+      r.durationSeconds || 0,
+      formatDuration(r.durationSeconds || 0),
+      r.mode || 'countdown',
+      r.triggerStart || 'QRコード (START)',
+      r.triggerStop || 'QRコード (STOP)',
     ]);
 
     const csvContent =
@@ -98,10 +103,11 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
   };
 
   const formatDuration = (totalSec: number) => {
-    if (!totalSec || totalSec <= 0) return '0分';
-    const hours = Math.floor(totalSec / 3600);
-    const mins = Math.floor((totalSec % 3600) / 60);
-    const secs = totalSec % 60;
+    const num = Number(totalSec);
+    if (isNaN(num) || num <= 0) return '0分';
+    const hours = Math.floor(num / 3600);
+    const mins = Math.floor((num % 3600) / 60);
+    const secs = num % 60;
 
     if (hours > 0) {
       return `${hours}時間${mins}分`;
@@ -112,20 +118,46 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
     return `${secs}秒`;
   };
 
-  const formatClock = (timestamp: number) => {
-    const d = new Date(timestamp);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formatFullDateTime = (timestamp?: number) => {
+    if (!timestamp || typeof timestamp !== 'number' || isNaN(timestamp)) return '-';
+    try {
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return '-';
+      return d.toLocaleString();
+    } catch {
+      return '-';
+    }
   };
 
-  const formatDate = (timestamp: number) => {
-    const d = new Date(timestamp);
-    return `${d.getMonth() + 1}/${d.getDate()}`;
+  const formatClock = (timestamp?: number) => {
+    if (!timestamp || typeof timestamp !== 'number' || isNaN(timestamp)) return '--:--';
+    try {
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return '--:--';
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '--:--';
+    }
+  };
+
+  const formatDate = (timestamp?: number) => {
+    if (!timestamp || typeof timestamp !== 'number' || isNaN(timestamp)) return '-';
+    try {
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return '-';
+      return `${d.getMonth() + 1}/${d.getDate()}`;
+    } catch {
+      return '-';
+    }
   };
 
   if (!isOpen) return null;
 
-  // Max value for bar scaling
-  const maxBarSeconds = data?.bars?.reduce((max, b) => Math.max(max, b.seconds), 0) || 1;
+  // Max value for bar scaling safely
+  const maxBarSeconds =
+    data?.bars && Array.isArray(data.bars) && data.bars.length > 0
+      ? data.bars.reduce((max, b) => Math.max(max, Number(b?.seconds) || 0), 0) || 1
+      : 1;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 overflow-y-auto animate-fadeIn">
@@ -171,7 +203,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
         <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-950/70 p-2 sm:px-6">
           <div className="flex bg-neutral-900 p-1 rounded-2xl border border-neutral-800 space-x-1">
             <button
-              onClick={() => setPeriod('day')}
+              onClick={() => handlePeriodChange('day')}
               className={`py-1.5 px-3 sm:px-4 text-xs font-bold rounded-xl transition flex items-center space-x-1.5 ${
                 period === 'day'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
@@ -183,7 +215,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
             </button>
 
             <button
-              onClick={() => setPeriod('week')}
+              onClick={() => handlePeriodChange('week')}
               className={`py-1.5 px-3 sm:px-4 text-xs font-bold rounded-xl transition flex items-center space-x-1.5 ${
                 period === 'week'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
@@ -195,7 +227,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
             </button>
 
             <button
-              onClick={() => setPeriod('month')}
+              onClick={() => handlePeriodChange('month')}
               className={`py-1.5 px-3 sm:px-4 text-xs font-bold rounded-xl transition flex items-center space-x-1.5 ${
                 period === 'month'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
@@ -295,61 +327,70 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
 
               {hoveredBar && (
                 <div className="bg-neutral-800 border border-neutral-700 px-3 py-1.5 rounded-xl text-xs text-right">
-                  <span className="text-neutral-300 font-bold">{hoveredBar.fullLabel}</span>:
+                  <span className="text-neutral-300 font-bold">{hoveredBar.fullLabel || hoveredBar.label}</span>:
                   <span className="text-emerald-400 font-bold ml-1.5">
-                    {formatDuration(hoveredBar.seconds)}
+                    {formatDuration(hoveredBar.seconds || 0)}
                   </span>
                   <span className="text-neutral-400 text-[10px] ml-1">
-                    ({hoveredBar.sessionsCount}回)
+                    ({hoveredBar.sessionsCount || 0}回)
                   </span>
                 </div>
               )}
             </div>
 
             {/* Chart Area */}
-            <div className="h-56 w-full flex items-end gap-1 sm:gap-2 pt-6 pb-2 px-2 border-b border-neutral-800">
-              {data?.bars?.map((bar, index) => {
-                const heightPercent = maxBarSeconds > 0 ? (bar.seconds / maxBarSeconds) * 100 : 0;
-                const isHovered = hoveredBar?.key === bar.key;
+            <div className="h-56 w-full flex items-end gap-1 sm:gap-1.5 pt-6 pb-2 px-2 border-b border-neutral-800 overflow-x-auto">
+              {data?.bars && Array.isArray(data.bars) ? (
+                data.bars.map((bar, index) => {
+                  const sec = Number(bar?.seconds) || 0;
+                  const rawHeight = maxBarSeconds > 0 ? (sec / maxBarSeconds) * 100 : 0;
+                  const heightPercent = isNaN(rawHeight) ? 0 : Math.max(4, Math.min(100, rawHeight));
+                  const isHovered = hoveredBar?.key === bar.key;
 
-                return (
-                  <div
-                    key={bar.key || index}
-                    className="flex-1 h-full flex flex-col justify-end items-center group relative cursor-pointer"
-                    onMouseEnter={() => setHoveredBar(bar)}
-                    onMouseLeave={() => setHoveredBar(null)}
-                  >
-                    {/* Tooltip on mobile/hover */}
-                    {isHovered && (
-                      <div className="absolute -top-10 bg-neutral-800 border border-neutral-600 text-white text-[10px] py-1 px-2 rounded-lg whitespace-nowrap shadow-xl z-30 pointer-events-none">
-                        <div>{formatDuration(bar.seconds)}</div>
-                        <div className="text-[9px] text-neutral-400">{bar.sessionsCount}回</div>
-                      </div>
-                    )}
-
-                    {/* Bar graphic */}
+                  return (
                     <div
-                      style={{ height: `${Math.max(4, heightPercent)}%` }}
-                      className={`w-full rounded-t-lg transition-all duration-300 ${
-                        bar.seconds === 0
-                          ? 'bg-neutral-800/40 hover:bg-neutral-700/60'
-                          : isHovered
-                          ? 'bg-emerald-400 shadow-[0_0_12px_#34d399]'
-                          : 'bg-gradient-to-t from-indigo-600 to-emerald-400 group-hover:from-indigo-500 group-hover:to-emerald-300'
-                      }`}
-                    />
-                  </div>
-                );
-              })}
+                      key={bar.key || `bar_${index}`}
+                      className="flex-1 h-full min-w-[8px] flex flex-col justify-end items-center group relative cursor-pointer"
+                      onMouseEnter={() => setHoveredBar(bar)}
+                      onMouseLeave={() => setHoveredBar(null)}
+                    >
+                      {/* Tooltip on mobile/hover */}
+                      {isHovered && (
+                        <div className="absolute -top-10 bg-neutral-800 border border-neutral-600 text-white text-[10px] py-1 px-2 rounded-lg whitespace-nowrap shadow-xl z-30 pointer-events-none">
+                          <div>{formatDuration(sec)}</div>
+                          <div className="text-[9px] text-neutral-400">{bar.sessionsCount || 0}回</div>
+                        </div>
+                      )}
+
+                      {/* Bar graphic */}
+                      <div
+                        style={{ height: `${heightPercent}%` }}
+                        className={`w-full rounded-t-sm transition-all duration-200 ${
+                          sec === 0
+                            ? 'bg-neutral-800/40 hover:bg-neutral-700/60'
+                            : isHovered
+                            ? 'bg-emerald-400 shadow-[0_0_12px_#34d399]'
+                            : 'bg-gradient-to-t from-indigo-600 to-emerald-400 group-hover:from-indigo-500 group-hover:to-emerald-300'
+                        }`}
+                      />
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-xs text-neutral-500">
+                  データを読み込み中...
+                </div>
+              )}
             </div>
 
             {/* X-Axis Labels */}
             <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-2 px-1 font-mono">
-              {data?.bars?.map((bar, index) => (
-                <div key={bar.key || index} className="flex-1 text-center truncate">
-                  {bar.label}
-                </div>
-              ))}
+              {data?.bars && Array.isArray(data.bars) &&
+                data.bars.map((bar, index) => (
+                  <div key={bar.key || `lbl_${index}`} className="flex-1 text-center truncate">
+                    {bar.label || ''}
+                  </div>
+                ))}
             </div>
           </div>
 
@@ -373,29 +414,32 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-900">
-                  {data?.recentRecords && data.recentRecords.length > 0 ? (
-                    data.recentRecords.map((r) => (
-                      <tr key={r.id} className="hover:bg-neutral-900/50 transition">
-                        <td className="py-2.5 text-neutral-300 font-mono">
-                          {formatDate(r.endTime)} {formatClock(r.startTime)} -{' '}
-                          {formatClock(r.endTime)}
-                        </td>
-                        <td className="py-2.5 font-bold text-white">
-                          {formatDuration(r.durationSeconds)}
-                        </td>
-                        <td className="py-2.5 text-neutral-400">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-neutral-800 text-neutral-300">
-                            {r.mode}
-                          </span>
-                        </td>
-                        <td className="py-2.5 text-neutral-300">
-                          <span className="text-emerald-400 font-medium">{r.triggerStart}</span>
-                        </td>
-                        <td className="py-2.5 text-neutral-400">
-                          <span className="text-rose-400 font-medium">{r.triggerStop}</span>
-                        </td>
-                      </tr>
-                    ))
+                  {data?.recentRecords && Array.isArray(data.recentRecords) && data.recentRecords.length > 0 ? (
+                    data.recentRecords.map((r, idx) => {
+                      if (!r) return null;
+                      return (
+                        <tr key={r.id || `rec_${idx}`} className="hover:bg-neutral-900/50 transition">
+                          <td className="py-2.5 text-neutral-300 font-mono">
+                            {formatDate(r.endTime)} {formatClock(r.startTime)} -{' '}
+                            {formatClock(r.endTime)}
+                          </td>
+                          <td className="py-2.5 font-bold text-white">
+                            {formatDuration(Number(r.durationSeconds) || 0)}
+                          </td>
+                          <td className="py-2.5 text-neutral-400">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] bg-neutral-800 text-neutral-300">
+                              {r.mode || 'countdown'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-neutral-300">
+                            <span className="text-emerald-400 font-medium">{r.triggerStart || 'QRコード (START)'}</span>
+                          </td>
+                          <td className="py-2.5 text-neutral-400">
+                            <span className="text-rose-400 font-medium">{r.triggerStop || 'QRコード (STOP)'}</span>
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-neutral-500">
